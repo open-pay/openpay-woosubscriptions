@@ -17,7 +17,6 @@ jQuery(function() {
 
     /* Both Forms */
     jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {
-        jQuery('#openpay_token').val("");
         jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
     });
 
@@ -117,6 +116,26 @@ function error_callbak(response) {
 
         case 2006:
             msg = "El código de seguridad de la tarjeta (CVV2) no fue proporcionado.";
+            break;
+
+        case 3001:
+            msg = "La tarjeta fue rechazada.";
+            break;
+
+        case 3002:
+            msg = "La tarjeta ha expirado.";
+            break;
+
+        case 3003:
+            msg = "La tarjeta no tiene fondos suficientes.";
+            break;
+
+        case 3004:
+            msg = "La tarjeta ha sido identificada como una tarjeta robada.";
+            break;
+
+        case 3005:
+            msg = "El cargo fue declinado por alto riesgo, intente nuevamente en 30 minutos.";
             break;
 
         default: //Demás errores 400 

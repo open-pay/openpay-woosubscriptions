@@ -4,7 +4,7 @@
   Plugin Name: Openpay WooSubscriptions Plugin
   Plugin URI: https://github.com/open-pay/openpay-woosubscriptions
   Description: A payment gateway for Openpay (http://openpay.mx/). A Openpay account and a server with Curl, SSL support, and a valid SSL certificate is required (for security reasons) for this gateway to function.
-  Version: 2.0.3
+  Version: 1.2
   Author: Federico Balderas
   Author URI: http://foograde.com
 
@@ -35,7 +35,7 @@ class WC_Openpay_Subscriptions {
      * Constructor
      */
     public function __construct() {
-        define('WC_OPENPAY_VERSION', '2.0.3');
+        define('WC_OPENPAY_VERSION', '1.2');
         define('WC_OPENPAY_TEMPLATE_PATH', untrailingslashit(plugin_dir_path(__FILE__)) . '/templates/');
         define('WC_OPENPAY_PLUGIN_URL', untrailingslashit(plugins_url(basename(plugin_dir_path(__FILE__)), basename(__FILE__))));
         define('WC_OPENPAY_MAIN_FILE', __FILE__);
@@ -46,8 +46,8 @@ class WC_Openpay_Subscriptions {
         add_filter('woocommerce_payment_gateways', array($this, 'register_gateway'));
         add_action('woocommerce_order_status_on-hold_to_processing', array($this, 'capture_payment'));
         add_action('woocommerce_order_status_on-hold_to_completed', array($this, 'capture_payment'));
-        //add_action('woocommerce_order_status_on-hold_to_cancelled', array($this, 'cancel_payment'));
-        
+        add_action('woocommerce_order_status_on-hold_to_cancelled', array($this, 'cancel_payment'));
+        add_action('woocommerce_order_status_on-hold_to_refunded', array($this, 'cancel_payment'));
     }
 
     /**
@@ -125,6 +125,35 @@ class WC_Openpay_Subscriptions {
                     update_post_meta($order->id, 'Openpay Payment ID', $result->id);
                     update_post_meta($order->id, 'Openpay Fee', number_format($result->fee / 100, 2, '.', ''));
                     update_post_meta($order->id, 'Net Revenue From Openpay', ( $order->order_total - number_format($result->fee / 100, 2, '.', '')));
+                }
+            }
+        }
+    }
+
+    /**
+     * Cancel pre-auth on refund/cancellation
+     *
+     * @param  int $order_id
+     */
+    public function cancel_payment($order_id) {
+        $order = new WC_Order($order_id);
+
+        if ($order->payment_method == 'openpay') {
+            $charge = get_post_meta($order_id, '_openpay_charge_id', true);
+
+            if ($charge) {
+                $openpay = new WC_Gateway_Openpay();
+
+                $result = $openpay->openpay_request(array(
+                    'amount' => $order->order_total * 100
+                        ), 'charges/' . $charge . '/refund');
+
+                if (is_wp_error($result)) {
+                    $order->add_order_note(__('Unable to refund charge!', 'openpay-woosubscriptions') . ' ' . $result->get_error_message());
+                } else {
+                    $order->add_order_note(sprintf(__('Openpay charge refunded (Charge ID: %s)', 'openpay-woosubscriptions'), $result->id));
+                    delete_post_meta($order->id, '_openpay_charge_captured');
+                    delete_post_meta($order->id, '_openpay_charge_id');
                 }
             }
         }
