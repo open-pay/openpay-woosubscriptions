@@ -222,43 +222,13 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
      */
     public function payment_fields() {
 
-        $custom_fields = array(
-            '<input type="hidden" class="openpay_token" name="openpay_token" id="openpay_token" />
-            <input type="hidden" name="device_session_id" id="device_session_id" />',
-            'card-number-field' => '<p class="form-row form-row-wide">
-				<label for="'.esc_attr($this->id).'-card-number">'.__('Número de tarjeta', 'woocommerce').' <span class="required">*</span></label>
-				<input id="'.esc_attr($this->id).'-card-number" class="input-text wc-credit-card-form-card-number" type="text" maxlength="20" autocomplete="off" placeholder="•••• •••• •••• ••••" data-openpay-card="card_number" />
-			</p>',
-            'card-expiry-field' => '<p class="form-row form-row-first">
-				<label for="'.esc_attr($this->id).'-card-expiry">'.__('Expira (MM/YY)', 'woocommerce').' <span class="required">*</span></label>
-				<input id="'.esc_attr($this->id).'-card-expiry" class="input-text wc-credit-card-form-card-expiry" type="text" autocomplete="off" placeholder="'.__('MM / YY', 'woocommerce').'" data-openpay-card="expiration_year" />
-			</p>',
-            'card-cvc-field' => '<p class="form-row form-row-last">
-				<label for="'.esc_attr($this->id).'-card-cvc">'.__('Código de seguridad', 'woocommerce').' <span class="required">*</span></label>
-				<input id="'.esc_attr($this->id).'-card-cvc" class="input-text wc-credit-card-form-card-cvc" type="text" autocomplete="off" placeholder="'.__('CVC', 'woocommerce').'" data-openpay-card="cvv2" />
-			</p>'
-        );
-
-
-        $checked = 1;
-        ?>
-        <fieldset>
-            <?php
-            if ($this->description) {
-                echo wpautop(esc_html($this->description));
-            }
-            ?>
-            <div class="openpay_new_card" <?php if ($checked === 0) : ?>style="display:none;"<?php endif; ?>
-                 data-description=""
-                 data-amount="<?php echo $this->get_openpay_amount(WC()->cart->total); ?>"
-                 data-name="<?php echo sprintf(__('%s', 'openpay-woosubscriptions'), get_bloginfo('name')); ?>"
-                 data-label="<?php _e('Confirm and Pay', 'openpay-woosubscriptions'); ?>"
-                 data-currency="<?php echo strtolower(get_woocommerce_currency()); ?>"
-                 >
-                     <?php $this->credit_card_form(array('fields_have_names' => false), $custom_fields); ?>
-            </div>
-        </fieldset>
-        <?php
+        $cc_form = new WC_Payment_Gateway_CC;
+        $cc_form->id       = $this->id;
+        $cc_form->supports = $this->supports;
+        $this->cc_form = $cc_form;
+        
+        $form_template = realpath(dirname(__FILE__)).'/../templates/payment_form.php';        
+        include_once($form_template);        
     }
 
     /**
@@ -276,7 +246,6 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         wp_enqueue_script('openpay', 'https://openpay.s3.amazonaws.com/openpay.v1.min.js', '', '1.0', true);
         wp_enqueue_script('openpay_fraud', 'https://openpay.s3.amazonaws.com/openpay-data.v1.min.js', '', '1.0', true);
         wp_enqueue_script('woocommerce_openpay', plugins_url('assets/js/openpay.js', dirname(__FILE__)), array('openpay'), WC_OPENPAY_VERSION, true);
-
 
         $openpay_params = array(
             'merchant_id' => $this->merchant_id,
@@ -369,6 +338,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             $post_data['description'] = sprintf(__('%s - Order '.$card_id.' %s', 'openpay-woosubscriptions'), wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES), $order->get_order_number());
             $post_data['method'] = 'card';
             $post_data['device_session_id'] = $device_session_id;
+            $post_data['device_session_id'] = $order->id."_".date('Ymd');
 
             // Make the request
             $response = $this->openpay_request($post_data, 'customers/'.$customer_id.'/charges');

@@ -3,8 +3,8 @@
 /*
   Plugin Name: Openpay WooSubscriptions Plugin
   Plugin URI: https://github.com/open-pay/openpay-woosubscriptions
-  Description: A payment gateway for Openpay (http://openpay.mx/). A Openpay account and a server with Curl, SSL support, and a valid SSL certificate is required (for security reasons) for this gateway to function.
-  Version: 2.0.3
+  Description: Este plugin soporta suscripciones a través de Openpay utilizando WooCommerce (2.6.0) y WooCommerce Subscriptions (2.0.16)
+  Version: 2.6.0
   Author: Federico Balderas
   Author URI: http://foograde.com
 
@@ -35,7 +35,7 @@ class WC_Openpay_Subscriptions {
      * Constructor
      */
     public function __construct() {
-        define('WC_OPENPAY_VERSION', '2.0.3');
+        define('WC_OPENPAY_VERSION', '2.6.0');
         define('WC_OPENPAY_TEMPLATE_PATH', untrailingslashit(plugin_dir_path(__FILE__)) . '/templates/');
         define('WC_OPENPAY_PLUGIN_URL', untrailingslashit(plugins_url(basename(plugin_dir_path(__FILE__)), basename(__FILE__))));
         define('WC_OPENPAY_MAIN_FILE', __FILE__);

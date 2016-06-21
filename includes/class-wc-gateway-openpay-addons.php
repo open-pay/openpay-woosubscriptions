@@ -286,7 +286,8 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
             'amount' => $this->get_openpay_amount($amount),
             'currency' => strtolower(get_woocommerce_currency()),
             'description' => $subscription_name,
-            'method' => 'card'
+            'method' => 'card',
+            'order_id' => $order->id."_".date('Ymd')
         );
 
         // See if we're using a particular card

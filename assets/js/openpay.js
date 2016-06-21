@@ -10,14 +10,10 @@ jQuery(function() {
         return openpayFormHandler();
     });
 
-    /* Pay Page Form */
-    jQuery("form.checkout").submit(function(event) {      
-        return openpayFormHandler();
-    });
-
     /* Both Forms */
-    jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {
-        jQuery('#openpay_token').val("");
+    jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {        
+        jQuery('#openpay_token').remove();
+        jQuery('#device_session_id').remove();        
         jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
     });
 
@@ -42,7 +38,8 @@ function openpayFormHandler() {
                 card_number: card.replace(/ /g,''),
                 cvv2: cvc,
                 expiration_month: expires['month'] || 0,
-                expiration_year: year || 0                
+                expiration_year: year || 0,
+                address: {}
             };
             
             if (jQuery('#billing_first_name').size() > 0) {
@@ -52,7 +49,6 @@ function openpayFormHandler() {
             }
 
             if (jQuery('#billing_address_1').size() > 0) {
-                data.address = {};
                 data.address.line1 = jQuery('#billing_address_1').val();
                 data.address.line2 = jQuery('#billing_address_2').val();
                 data.address.state = jQuery('#billing_state').val();
@@ -60,7 +56,6 @@ function openpayFormHandler() {
                 data.address.postal_code = jQuery('#billing_postcode').val();
                 data.address.country_code = 'MX';
             } else if (data.address.line1) {
-                data.address = {};
                 data.address.line1 = wc_openpay_params.billing_address_1;
                 data.address.line2 = wc_openpay_params.billing_address_2;
                 data.address.state = wc_openpay_params.billing_state;
@@ -69,8 +64,7 @@ function openpayFormHandler() {
                 data.address.country_code = 'MX';
             }
             
-            OpenPay.token.create(data, success_callbak, error_callbak);            
-            
+            OpenPay.token.create(data, success_callbak, error_callbak);                        
             return false;
         }
     }
@@ -82,8 +76,9 @@ function success_callbak(response) {
     var $form = jQuery("form.checkout, form#order_review");
     var token = response.data.id;
     var deviceSessionId = OpenPay.deviceData.setup();
-    jQuery('#device_session_id').val(deviceSessionId);
-    jQuery('#openpay_token').val(token);
+
+    $form.append('<input type="hidden" id="openpay_token" name="openpay_token" value="' + escape(token) + '" />');
+    $form.append('<input type="hidden" id="device_session_id" name="device_session_id" value="' + escape(deviceSessionId) + '" />');    
     $form.submit();
 };
 
