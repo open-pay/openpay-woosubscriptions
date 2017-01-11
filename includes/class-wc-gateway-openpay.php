@@ -338,7 +338,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             $post_data['description'] = sprintf(__('%s - Order '.$card_id.' %s', 'openpay-woosubscriptions'), wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES), $order->get_order_number());
             $post_data['method'] = 'card';
             $post_data['device_session_id'] = $device_session_id;
-            $post_data['device_session_id'] = $order->id."_".date('Ymd');
+            $post_data['order_id'] = $order->id."_".date('YmdHis');
 
             // Make the request
             $response = $this->openpay_request($post_data, 'customers/'.$customer_id.'/charges');
@@ -486,7 +486,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         return json_decode($result);
     }
 
-    private function handleRequestError($responseCode) {
+    public function handleRequestError($responseCode) {
 
         switch ($responseCode) {
 

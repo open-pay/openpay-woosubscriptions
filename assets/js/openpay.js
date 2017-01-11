@@ -11,7 +11,8 @@ jQuery(function() {
     });
 
     /* Both Forms */
-    jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {        
+    jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {
+        //jQuery('#openpay_token').val("");
         jQuery('#openpay_token').remove();
         jQuery('#device_session_id').remove();        
         jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
