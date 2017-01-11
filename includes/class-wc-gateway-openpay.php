@@ -317,7 +317,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 }
             }
 
-            $card_id = $this->add_card($customer_id, $openpay_token);
+            $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
 
             if (is_wp_error($card_id)) {
                 throw new Exception($card_id->get_error_message());
@@ -432,11 +432,12 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
      * @param string $openpay_token
      * @return int|WP_ERROR
      */
-    public function add_card($customer_id, $openpay_token) {
+    public function add_card($customer_id, $openpay_token, $device_session_id) {
         if ($openpay_token) {
 
             $cardDataRequest = array(
-                'token_id' => $openpay_token
+                'token_id' => $openpay_token,
+                'device_session_id' => $device_session_id
             );
 
             $response = $this->openpay_request($cardDataRequest, 'customers/'.$customer_id.'/cards');

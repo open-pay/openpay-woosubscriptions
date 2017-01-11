@@ -66,7 +66,7 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                 }
             }
 
-            $card_id = $this->add_card($customer_id, $openpay_token);
+            $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
 
             if (is_wp_error($card_id)) {
                 throw new Exception($card_id->get_error_message());
@@ -126,6 +126,7 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         if (WC_Pre_Orders_Order::order_requires_payment_tokenization($order_id)) {
             $order = new WC_Order($order_id);
             $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
+            $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';
             $card_id = isset($_POST['openpay_card_id']) ? wc_clean($_POST['openpay_card_id']) : '';
             $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
 
@@ -166,7 +167,7 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                     }
                 }
 
-                $card_id = $this->add_card($customer_id, $openpay_token);
+                $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
                 if (is_wp_error($card_id)) {
                     throw new Exception($card_id->description);
                 }
