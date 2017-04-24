@@ -396,17 +396,21 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             'last_name' => $order->billing_last_name,
             'email' => $order->billing_email,
             'requires_account' => false,
-            'phone_number' => $order->billing_phone,
-            'address' => array(
-                'line1' => $order->billing_address_1,
-                'line2' => $order->billing_address_2,
+            'phone_number' => $order->billing_phone,            
+        );
+
+        if($this->hasAddress($order)) {
+            $customerData['address'] = array(
+                'line1' => substr($order->billing_address_1, 0, 200),
+                'line2' => substr($order->billing_address_2, 0, 50),
+                'line3' => '',
                 'state' => $order->billing_state,
                 'city' => $order->billing_city,
                 'postal_code' => $order->billing_postcode,
-                'country_code' => 'MX'
-            )
-        );
-
+                'country_code' => $order->billing_country
+            );
+        }
+                
         $response = $this->openpay_request($customerData, 'customers');
 
         if (!isset($response->error_code)) {
@@ -424,6 +428,14 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             return new WP_Error('error', __($response->error_code.' '.$msg, 'openpay-woosubscriptions'));
         }
     }
+    
+    public function hasAddress($order) {
+        if($order->billing_address_1 && $order->billing_state && $order->billing_postcode && $order->billing_country && $order->billing_city) {
+            return true;
+        }
+        return false;    
+    }
+
 
     /**
      * Add a card to a customer via the API.

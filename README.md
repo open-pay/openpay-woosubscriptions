@@ -1,2 +1,6 @@
-# openpay-woosubscriptions
-Plugin para módulo de suscripciones de WooCommerce, actualmente compatible con la versión 2.1.0
+![Openpay Woocommerce](http://www.openpay.mx/img/github/woo-commerce.jpg)
+
+### WooSubscriptions Plugin for Openpay API services 
+For more information about this module go to: 
+
+http://www.openpay.mx/docs/plugins/woosubscriptions.html
