@@ -4,9 +4,9 @@
   Plugin Name: Openpay WooSubscriptions Plugin
   Plugin URI: https://github.com/open-pay/openpay-woosubscriptions
   Description: Este plugin soporta suscripciones a través de Openpay utilizando WooCommerce (2.6.8) y WooCommerce Subscriptions (2.1.0)
-  Version: 2.7.0
-  Author: Federico Balderas
-  Author URI: http://foograde.com
+  Version: 2.7.1
+  Author: Openpay
+  Author URI: https://openpay.mx
 
   Copyright: © 2009-2014 WooThemes.
   License: GNU General Public License v3.0
@@ -35,7 +35,7 @@ class WC_Openpay_Subscriptions {
      * Constructor
      */
     public function __construct() {
-        define('WC_OPENPAY_VERSION', '2.7.0');
+        define('WC_OPENPAY_VERSION', '2.7.1');
         define('WC_OPENPAY_TEMPLATE_PATH', untrailingslashit(plugin_dir_path(__FILE__)) . '/templates/');
         define('WC_OPENPAY_PLUGIN_URL', untrailingslashit(plugins_url(basename(plugin_dir_path(__FILE__)), basename(__FILE__))));
         define('WC_OPENPAY_MAIN_FILE', __FILE__);

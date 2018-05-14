@@ -11,4 +11,7 @@
     >
         <?php $this->cc_form->form() ?>        
     </div>
+    <div>
+        Transacciones realizadas vía: <img alt="" src="<?php echo $this->images_dir ?>openpay.png" style="float: none; display: inline;">	
+    </div>
 </fieldset>

@@ -35,7 +35,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         );
 
         // Icon
-        $icon = 'cards.png';
+        $icon = 'credit_cards.png';
         $this->icon = apply_filters('wc_openpay_icon', plugins_url('/assets/images/'.$icon, dirname(__FILE__)));
 
         // Load the form fields
@@ -226,6 +226,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $cc_form->id       = $this->id;
         $cc_form->supports = $this->supports;
         $this->cc_form = $cc_form;
+        $this->images_dir = plugin_dir_url(__FILE__).'../assets/images/';
         
         $form_template = realpath(dirname(__FILE__)).'/../templates/payment_form.php';        
         include_once($form_template);        
