@@ -3,7 +3,7 @@
 /*
   Plugin Name: Openpay WooSubscriptions Plugin
   Plugin URI: https://github.com/open-pay/openpay-woosubscriptions
-  Description: Este plugin soporta suscripciones a través de Openpay utilizando WooCommerce (2.6.8) y WooCommerce Subscriptions (2.1.0)
+  Description: Este plugin soporta suscripciones a través de Openpay utilizando WooCommerce (3.3.5) y WooCommerce Subscriptions (2.2.X)
   Version: 2.7.1
   Author: Openpay
   Author URI: https://openpay.mx
