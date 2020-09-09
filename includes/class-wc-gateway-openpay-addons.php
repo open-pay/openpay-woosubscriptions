@@ -21,9 +21,14 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         if (class_exists('WC_Subscriptions_Order')) {
             add_action('woocommerce_scheduled_subscription_payment_'.$this->id, array($this, 'scheduled_subscription_payment'), 10, 3);
             add_filter('woocommerce_subscriptions_renewal_order_meta_query', array($this, 'remove_renewal_order_meta'), 10, 4);
-            add_action('woocommerce_subscriptions_changed_failing_payment_method_openpay', array($this, 'update_failing_payment_method'), 10, 3);
+            add_action('woocommerce_subscription_failing_payment_method_updated_openpay', array($this, 'update_failing_payment_method'), 10, 2);
+            add_action('admin_enqueue_scripts', array($this, 'openpay_cards_admin_enqueue'), 10, 2);
         }
 
+    }
+
+    public function openpay_cards_admin_enqueue($hook) {
+        wp_enqueue_script('openpay_cards_admin_form', plugins_url('../assets/js/admin.js', __FILE__), array('jquery'), '', true);
     }
 
     /**
@@ -37,6 +42,7 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';
         $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
         $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
+        $openpay_cc = $_POST['openpay_cc'];
 
         if (!$customer_id || !is_string($customer_id)) {
             $customer_id = 0;
@@ -45,8 +51,6 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
 
         // Use Openpay CURL API for payment
         try {
-            $post_data = array();
-
             // If not using a saved card, we need a token
             if (empty($openpay_token)) {
                 $error_msg = __('Please make sure your card details have been entered correctly and that your browser supports JavaScript.', 'openpay-woosubscriptions');
@@ -66,37 +70,35 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                 }
             }
 
-            $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
-
-            if (is_wp_error($card_id)) {
-                throw new Exception($card_id->get_error_message());
-            }
-
-            $post_data['source_id'] = $card_id;
-            $post_data['customer'] = $customer_id;
-
             // Store the ID in the order
             update_post_meta($order_id, '_openpay_customer_id', $customer_id);
-            update_post_meta($order_id, '_openpay_card_id', $card_id);
+            update_post_meta($order_id, '_openpay_card_id', $openpay_token);
+            
+            if($openpay_cc == 'new'){
+                $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
+                if (is_wp_error($card_id)) {
+                    throw new Exception($card_id->get_error_message());
+                }
+                update_post_meta($order_id, '_openpay_card_id', $card_id);
+            }
+            
 
             $initial_payment = $order->get_total();
 
             if ($initial_payment > 0) {
-                $payment_response = $this->process_subscription_payment($order, $initial_payment, $device_session_id);
+                $charge = $this->process_subscription_payment($order, $initial_payment, $device_session_id);
             }
 
-            if (isset($payment_response->error_code)) {
-                throw new Exception($payment_response->description);
-            } else {
-
-                if (isset($payment_response->fee->amount)) {
-                    $fee = number_format(($payment_response->fee->amount + $payment_response->fee->tax), 2);
-                    update_post_meta($order->id, 'Openpay Fee', $fee);
-                    update_post_meta($order->id, 'Net Revenue From Openpay', $order->order_total - $fee);
-                }
+            if (is_wp_error($charge)) {
+                $order->add_order_note(sprintf(__($charge->get_error_message(), 'openpay-woosubscriptions')));
+                error_log('ERROR '.$charge->get_error_message());
+                throw new Exception($charge->get_error_message());
+            }else{
+                $order->add_order_note(sprintf(__('Openpay subscription payment completed (Charge ID: %s)', 'openpay-woosubscriptions'), $charge->id));            
+                update_post_meta($order->id, '_openpay_charge_id', $charge->id);
 
                 // Payment complete
-                $order->payment_complete($payment_response->id);
+                $order->payment_complete($charge->id);
 
                 // Remove cart
                 WC()->cart->empty_cart();
@@ -104,12 +106,18 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                 // Activate subscriptions
                 WC_Subscriptions_Manager::activate_subscriptions_for_order($order);
 
-                // Return thank you page redirect
-                return array(
-                    'result' => 'success',
-                    'redirect' => $this->get_return_url($order)
-                );
+                if (isset($charge->fee->amount)) {
+                    $fee = number_format(($charge->fee->amount + $charge->fee->tax), 2);
+                    update_post_meta($order->id, 'Openpay Fee', $fee);
+                    update_post_meta($order->id, 'Net Revenue From Openpay', $order->order_total - $fee);
+                }
             }
+
+            // Return thank you page redirect
+            return array(
+                'result' => 'success',
+                'redirect' => $this->get_return_url($order)
+            );
         } catch (Exception $e) {
             wc_add_notice(__('Error:', 'openpay-woosubscriptions').' "'.$e->getMessage().'"', 'error');
             return;
@@ -126,10 +134,10 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         if (WC_Pre_Orders_Order::order_requires_payment_tokenization($order_id)) {
             $order = new WC_Order($order_id);
             $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
-            $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';
-            $card_id = isset($_POST['openpay_card_id']) ? wc_clean($_POST['openpay_card_id']) : '';
+            $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';;
             $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
-
+            $openpay_cc = $_POST['openpay_cc'];
+            
             if (!$customer_id || !is_string($customer_id)) {
                 $customer_id = 0;
             }
@@ -143,9 +151,9 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                 }
 
                 // Pay using a saved card!
-                if ($card_id !== 'new' && $card_id && $customer_id) {
+                if ($card_id !== 'new' && $customer_id) {
                     $post_data['customer'] = $customer_id;
-                    $post_data['source_id'] = $card_id;
+                    $post_data['source_id'] = $openpay_token;
                 }
 
                 // If not using a saved card, we need a token
@@ -166,15 +174,14 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                         throw new Exception($customer_id->get_error_message());
                     }
                 }
-
-                $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
-                if (is_wp_error($card_id)) {
-                    throw new Exception($card_id->description);
+                if($openpay_cc == 'new'){
+                    $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
+                    if (is_wp_error($card_id)) {
+                        throw new Exception($card_id->description);
+                    }
+                    $post_data['source_id'] = $card_id;
                 }
-
-                $post_data['source_id'] = $card_id;
-
-
+                
                 // Store the ID in the order
                 update_post_meta($order->id, '_openpay_customer_id', $customer_id);
 
@@ -212,17 +219,76 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
      */
     public function process_payment($order_id) {
         // Processing subscription
-        if (class_exists('WC_Subscriptions_Order') && wcs_order_contains_subscription($order_id)) {
+        if ($this->has_subscription($order_id)) {
+            if ($this->is_change_payment()) {
+				return $this->change_payment_method($order_id);
+            }
             return $this->process_subscription($order_id);
-
-            // Processing pre-order
         } elseif (class_exists('WC_Pre_Orders_Order') && WC_Pre_Orders_Order::order_contains_pre_order($order_id)) {
             return $this->process_pre_order($order_id);
-
             // Processing regular product
         } else {
             return parent::process_payment($order_id);
         }
+    }
+
+    /**
+	 * Process the payment method change for subscriptions.
+	 *
+	 * @since 3.0.0
+	 * @param int $order_id
+	 */
+	public function change_payment_method($order_id) {
+		try {
+            $subscription = wc_get_order($order_id);
+            $parent_id = $subscription->get_parent_id();
+            $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
+            $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';
+            $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
+            $openpay_cc = $_POST['openpay_cc'];
+
+            if($openpay_cc == 'new'){
+                $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
+                if (is_wp_error($card_id)) {
+                    throw new Exception($card_id->get_error_message());
+                }
+            }else{
+                $card_id = $openpay_token;
+            }
+
+            update_post_meta($order_id, '_openpay_customer_id', $customer_id);
+            update_post_meta($order_id, '_openpay_card_id', $card_id);
+            update_post_meta($parent_id, '_openpay_card_id', $card_id);
+            
+
+			return array(
+				'result'   => 'success',
+				'redirect' => $this->get_return_url( $subscription ),
+            );
+            
+		} catch (Exception $e) {
+            wc_add_notice(__('Error:', 'openpay-woosubscriptions').' "'.$e->getMessage().'"', 'error');
+            return;
+		}
+    }
+    
+    /**
+	 * Is $order_id a subscription?
+	 * @param  int  $order_id
+	 * @return boolean
+	 */
+    public function has_subscription( $order_id ) {
+		return ( class_exists('WC_Subscriptions_Order') && ( wcs_order_contains_subscription( $order_id ) || wcs_is_subscription( $order_id ) || wcs_order_contains_renewal( $order_id ) ) );
+    }
+    
+    /**
+	 * Checks if page is pay for order and change payment page.
+     * 
+	 * @since 3.0.0
+	 * @return bool
+	 */
+    public function is_change_payment() {
+		return ( isset( $_GET['pay_for_order'] ) && isset( $_GET['change_payment_method'] ) );
     }
 
     /**
@@ -238,18 +304,21 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
 
         $renewal_order->add_order_note(sprintf(__('Openpay starting subscription payment', 'openpay-woosubscriptions')));
                 
-        $order = WC_Subscriptions_Renewal_Order::get_parent_order($renewal_order->id);                
-        $result = $this->process_subscription_payment($order, $amount_to_charge);
-                
-        if (!isset($result->error_code)) {
-            $order->add_order_note(sprintf(__('Openpay successful payment subscription', 'openpay-woosubscriptions')));
-            $order->add_order_note(sprintf(__('Active subscription', 'openpay-woosubscriptions')));
-            error_log('Openpay successful payment subscription');
-            WC_Subscriptions_Manager::process_subscription_payments_on_order($order);
-            WC_Subscriptions_Manager::activate_subscriptions_for_order($order);            
-        } else {
+        $order = WC_Subscriptions_Renewal_Order::get_parent_order($renewal_order->id);
+        $charge = $this->process_subscription_payment($order, $amount_to_charge, null, $renewal_order->id);
+
+        if (is_wp_error($charge)) {
+            $renewal_order->add_order_note(sprintf(__($charge->get_error_message(), 'openpay-woosubscriptions')));
             error_log('process_subscription_payment_failure_on_order: '.$order->id);
             WC_Subscriptions_Manager::process_subscription_payment_failure_on_order($order);
+        }else{
+            $renewal_order->add_order_note(sprintf(__('Openpay successful payment subscription (Charge ID: %s)', 'openpay-woosubscriptions'), $charge->id));
+            update_post_meta($renewal_order->id, '_openpay_charge_id', $charge->id);
+            
+            // Payment complete
+            $renewal_order->payment_complete($charge->id);
+            //WC_Subscriptions_Manager::process_subscription_payments_on_order($order);
+            WC_Subscriptions_Manager::activate_subscriptions_for_order($order);
         }
     }
 
@@ -262,11 +331,15 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
      * @param string $device_session_id (default: '')
      * @return void
      */
-    public function process_subscription_payment($order = '', $amount = 0, $device_session_id = null) {
-
+    public function process_subscription_payment($order = '', $amount = 0, $device_session_id = null, $renewal_order_id = null) {
         $order_items = $order->get_items();
         $order_item = array_shift($order_items);
-        $subscription_name = sprintf(__('Suscripción "%s"', 'openpay-woosubscriptions'), $order_item['name']).' '.sprintf(__('(Order %s)', 'openpay-woosubscriptions'), $order->get_order_number());
+        if($renewal_order_id){
+            $order_id = $renewal_order_id;
+        }else{
+            $order_id = $order->get_order_number();
+        }
+        $subscription_name = sprintf(__('Suscripción "%s"', 'openpay-woosubscriptions'), $order_item['name']).' '.sprintf(__('(Order %s)', 'openpay-woosubscriptions'), $order_id );
 
         if ($amount * 100 < 50) {
             return new WP_Error('openpay_error', __('Sorry, the minimum allowed order total is 0.50 to use this payment method.', 'openpay-woosubscriptions'));
@@ -297,7 +370,7 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
             'currency' => strtolower(get_woocommerce_currency()),
             'description' => $subscription_name,
             'method' => 'card',
-            'order_id' => $order->id."_".date('Ymd_His')
+            'order_id' => $order_id."_".date('Ymd_His')
         );
         
         // See if we're using a particular card
@@ -311,17 +384,12 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         }
 
         // Charge the customer
-        $response = $this->openpay_request($openpay_payment_args, 'customers/'.$openpay_customer.'/charges');
-
-        if (isset($response->error_code)) {
-            $msg = $this->handleRequestError($response->error_code);
-            $order->add_order_note(sprintf(__($response->error_code.' '.$msg, 'openpay-woosubscriptions')));
-            error_log('ERROR '.$response->error_code.': '.$response->description);
-            return $response;
-        } else {
-            $order->add_order_note(sprintf(__('Openpay subscription payment completed (Charge ID: %s)', 'openpay-woosubscriptions'), $response->id));            
-            update_post_meta($order->id, '_openpay_charge_id', $response->id);            
-            return $response;
+        $charge = $this->openpay_request($openpay_payment_args, 'customers/'.$openpay_customer.'/charges');
+        if (isset($charge->id)) {
+            return $charge;
+        }else{
+            $msg = $this->handleRequestError($charge->error_code);
+            return new WP_Error('Error', __($charge->error_code.' '.$msg, 'openpay-woosubscriptions'));
         }
     }
 
@@ -352,11 +420,12 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
      * @param string $subscription_key A subscription key of the form created by @see WC_Subscriptions_Manager::get_subscription_key()
      * @return void
      */
-    public function update_failing_payment_method($original_order, $renewal_order, $subscription_key) {
+    public function update_failing_payment_method($subscription, $renewal_order) {
         $new_customer_id = get_post_meta($renewal_order->id, '_openpay_customer_id', true);
         $new_card_id = get_post_meta($renewal_order->id, '_openpay_card_id', true);
-        update_post_meta($original_order->id, '_openpay_customer_id', $new_customer_id);
-        update_post_meta($original_order->id, '_openpay_card_id', $new_card_id);
+        update_post_meta($subscription->get_id(), '_openpay_customer_id', $new_customer_id);
+        update_post_meta($subscription->get_id(), '_openpay_card_id', $new_card_id);
+        update_post_meta($subscription->get_parent_id(), '_openpay_card_id', $new_card_id);
     }
 
 

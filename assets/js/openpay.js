@@ -1,20 +1,52 @@
 OpenPay.setId(wc_openpay_params.merchant_id);
 OpenPay.setApiKey(wc_openpay_params.public_key);
 OpenPay.setSandboxMode(wc_openpay_params.sandbox_mode);
-
+var deviceSessionId = OpenPay.deviceData.setup();
 
 jQuery(function() {
-    
+    jQuery('#device_session_id').val(deviceSessionId);
+    var $form = jQuery('form.checkout,form#order_review');
+
     /* Checkout Form */
     jQuery('form.checkout').on('checkout_place_order_openpay', function(event) {
+        if (jQuery('#openpay_cc').val() !== 'new') {
+            $form.append('<input type="hidden" name="openpay_token" value="' + jQuery('#openpay_cc').val() + '" />');
+            return true;
+        }
+        return openpayFormHandler();
+    });
+
+    if(jQuery('#openpay_cc').children('option').length > 1){
+        jQuery('#openpay_cc').parent().show();
+    }else{
+        jQuery('#openpay_cc').parent().hide();
+    }
+
+    jQuery(document).on("change", "#openpay_cc", function() {   
+        if (jQuery('#openpay_cc').val() !== "new") {  
+                                                          
+            jQuery('#openpay-card-number').val("");                                     
+            jQuery('#openpay-card-expiry').val("");            
+            jQuery('#openpay-card-cvc').val("");                                                         
+                            
+            jQuery('.openpay_new_card').hide();
+        } else {                    
+            jQuery('.openpay_new_card').show();
+        }
+    });
+
+    jQuery('form#order_review').on('submit', function(event) {
+        if (jQuery('#openpay_cc').val() !== 'new') {
+            $form.append('<input type="hidden" name="openpay_token" value="' + jQuery('#openpay_cc').val() + '" />');
+            return true;
+        }
         return openpayFormHandler();
     });
 
     /* Both Forms */
     jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {
         //jQuery('#openpay_token').val("");
-        jQuery('#openpay_token').remove();
-        jQuery('#device_session_id').remove();        
+        jQuery('#openpay_token').remove();      
         jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
     });
 
@@ -40,23 +72,26 @@ function openpayFormHandler() {
                 cvv2: cvc,
                 expiration_month: expires['month'] || 0,
                 expiration_year: year || 0,
-                address: {}
             };
             
-            if (jQuery('#billing_first_name').size() > 0) {
+            if (jQuery('#billing_first_name').length) {
                 data.holder_name = jQuery('#billing_first_name').val() + ' ' + jQuery('#billing_last_name').val();
             } else if (wc_openpay_params.billing_first_name) {
                 data.holder_name = wc_openpay_params.billing_first_name + ' ' + wc_openpay_params.billing_last_name;
             }
 
-            if (jQuery('#billing_address_1').size() > 0) {
-                data.address.line1 = jQuery('#billing_address_1').val();
-                data.address.line2 = jQuery('#billing_address_2').val();
-                data.address.state = jQuery('#billing_state').val();
-                data.address.city = jQuery('#billing_city').val();
-                data.address.postal_code = jQuery('#billing_postcode').val();
-                data.address.country_code = 'MX';
-            } else if (data.address.line1) {
+            if (jQuery('#billing_address_1').length) {
+                if(jQuery('#billing_address_1').val() && jQuery('#billing_state').val() && jQuery('#billing_city').val() && jQuery('#billing_postcode').val()) {
+                    data.address = {};
+                    data.address.line1 = jQuery('#billing_address_1').val();
+                    data.address.line2 = jQuery('#billing_address_2').val();
+                    data.address.state = jQuery('#billing_state').val();
+                    data.address.city = jQuery('#billing_city').val();
+                    data.address.postal_code = jQuery('#billing_postcode').val();
+                    data.address.country_code = 'MX';
+                }
+            } else if (wc_openpay_params.billing_address_1) {
+                data.address = {};
                 data.address.line1 = wc_openpay_params.billing_address_1;
                 data.address.line2 = wc_openpay_params.billing_address_2;
                 data.address.state = wc_openpay_params.billing_state;
@@ -76,10 +111,8 @@ function openpayFormHandler() {
 function success_callbak(response) {
     var $form = jQuery("form.checkout, form#order_review");
     var token = response.data.id;
-    var deviceSessionId = OpenPay.deviceData.setup();
 
-    $form.append('<input type="hidden" id="openpay_token" name="openpay_token" value="' + escape(token) + '" />');
-    $form.append('<input type="hidden" id="device_session_id" name="device_session_id" value="' + escape(deviceSessionId) + '" />');    
+    $form.append('<input type="hidden" id="openpay_token" name="openpay_token" value="' + escape(token) + '" />'); 
     $form.submit();
 };
 
