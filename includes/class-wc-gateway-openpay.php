@@ -31,6 +31,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             'subscription_suspension',
             'subscription_amount_changes',
             'subscription_payment_method_change',
+            'subscription_payment_method_change_customer',
             'subscription_date_changes',
         );
 
@@ -48,12 +49,12 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $this->title = $this->get_option('title');
         $this->description = $this->get_option('description');
         $this->enabled = $this->get_option('enabled');
-        $this->testmode = $this->get_option('testmode') === "yes" ? true : false;
-        $this->merchant_id = $this->testmode ? $this->get_option('test_merchant_id') : $this->get_option('merchant_id');
-        $this->secret_key = $this->testmode ? $this->get_option('test_secret_key') : $this->get_option('secret_key');
-        $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
+        $this->testmode = $this->get_option('sandbox') === "yes" ? true : false;
+        $this->merchant_id = $this->testmode ? $this->get_option('test_merchant_id') : $this->get_option('live_merchant_id');
+        $this->secret_key = $this->testmode ? $this->get_option('test_secret_key') : $this->get_option('live_secret_key');
+        $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('live_publishable_key');
         $this->api_endpoint = $this->testmode ? $apiSandboxEndpoint : $apiEndpoint;
-
+        $this->cc_options = $this->getCreditCardList();
 
         if ($this->testmode) {
             $this->description .= ' '.__('SANDBOX MODE ENABLED. In test mode, you can use the card number 4111111111111111 with any CVC and a valid expiration date.', 'openpay-woosubscriptions');
@@ -67,6 +68,40 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
 
         if (!$this->validateCurrency()) {
             $this->enabled = false;
+        }
+    }
+
+    private function getCreditCardList() {
+        if (!is_user_logged_in()) {            
+            return array(array('value' => 'new', 'name' => 'Nueva tarjeta'));
+        }
+
+        $customer_id = get_user_meta(get_current_user_id(), '_openpay_customer_id', true);
+
+        if ($this->isNullOrEmptyString($customer_id)) {
+            return array(array('value' => 'new', 'name' => 'Nueva tarjeta'));
+        }
+
+        $list = array(array('value' => 'new', 'name' => 'Nueva tarjeta'));        
+        try {
+            $cards = $this->getCreditCards($customer_id);
+            foreach ($cards as $card) {
+                array_push($list, array('value' => $card->id, 'name' => strtoupper($card->brand).' '.$card->card_number));  
+            }
+            return $list;            
+        } catch (Exception $e) {
+            $this->logger->error($e->getMessage());            
+            return $list;
+        }        
+    }
+
+    private function getCreditCards($customer_id) {        
+        try {          
+            $response = $this->openpay_request(null, 'customers/'.$customer_id.'/cards?offset=0&limit=10', 'GET');
+            return $response;
+        } catch (Exception $e) {
+            $this->logger->error($e->getMessage());            
+            throw $e;
         }
     }
 
@@ -159,7 +194,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'description' => '',
                 'default' => 'no'
             ),
-            'testmode' => array(
+            'sandbox' => array(
                 'title' => __('Sandbox mode', 'openpay-woosubscriptions'),
                 'label' => __('Enable Sandbox', 'openpay-woosubscriptions'),
                 'type' => 'checkbox',
@@ -178,19 +213,19 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'description' => __('This controls the description which the user sees during checkout.', 'openpay-woosubscriptions'),
                 'default' => __('Pay with your credit card via Openpay.', 'openpay-woosubscriptions')
             ),
-            'merchant_id' => array(
+            'live_merchant_id' => array(
                 'title' => __('Production Merchant ID', 'openpay-woosubscriptions'),
                 'type' => 'text',
                 'description' => __('Get your API keys from your openpay account.', 'openpay-woosubscriptions'),
                 'default' => ''
             ),
-            'secret_key' => array(
+            'live_secret_key' => array(
                 'title' => __('Production Secret Key', 'openpay-woosubscriptions'),
                 'type' => 'text',
                 'description' => __('Get your API keys from your openpay account.', 'openpay-woosubscriptions'),
                 'default' => ''
             ),
-            'publishable_key' => array(
+            'live_publishable_key' => array(
                 'title' => __('Production Public Key', 'openpay-woosubscriptions'),
                 'type' => 'text',
                 'description' => __('Get your API keys from your openpay account.', 'openpay-woosubscriptions'),
@@ -256,6 +291,13 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             'i18n_required_fields' => __('Please fill in required checkout fields first', 'openpay-woosubscriptions'),
         );
 
+        if(get_query_var('order-pay')){
+            $order_id = absint(get_query_var('order-pay'));
+            $order = new WC_Order($order_id);
+            $openpay_params['billing_first_name'] = $order->billing_first_name;
+            $openpay_params['billing_last_name'] = $order->billing_last_name;
+        }
+
         // If we're on the pay page we need to pass openpay.js the address of the order.
         if (is_checkout_pay_page() && isset($_GET['order']) && isset($_GET['order_id'])) {
             $order_key = urldecode($_GET['order']);
@@ -285,7 +327,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $device_session_id = isset($_POST['device_session_id']) ? wc_clean($_POST['device_session_id']) : '';
         $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
         $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
-
+        $openpay_cc = $_POST['openpay_cc'];
 
         if (!$customer_id || !is_string($customer_id)) {
             $customer_id = 0;
@@ -311,6 +353,8 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 throw new Exception($error_msg);
             }
 
+            $post_data['source_id'] = $openpay_token;
+
             if (!$customer_id) {
                 $customer_id = $this->add_customer($order);
                 if (is_wp_error($customer_id)) {
@@ -318,22 +362,23 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 }
             }
 
-            $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
-
-            if (is_wp_error($card_id)) {
-                throw new Exception($card_id->get_error_message());
+            if($openpay_cc == 'new'){
+                $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
+                if (is_wp_error($card_id)) {
+                    throw new Exception($card_id->get_error_message());
+                }
+                if ($card_id) {
+                    update_post_meta($order_id, '_openpay_card_id', $card_id);
+                }
+                $post_data['source_id'] = $card_id;
             }
 
             // Store the ID in the order
             if ($customer_id) {
                 update_post_meta($order_id, '_openpay_customer_id', $customer_id);
             }
-            if ($card_id) {
-                update_post_meta($order_id, '_openpay_card_id', $card_id);
-            }
 
             // Other charge data
-            $post_data['source_id'] = $card_id;
             $post_data['amount'] = $this->get_openpay_amount($order->order_total);
             $post_data['currency'] = strtolower(get_woocommerce_currency());
             $post_data['description'] = sprintf(__('%s - Order '.$card_id.' %s', 'openpay-woosubscriptions'), wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES), $order->get_order_number());
@@ -489,11 +534,18 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
         curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json',
-            'Content-Length: '.strlen($data_string))
-        );
+        curl_setopt($ch, CURLOPT_USERAGENT, "Openpay-WSUBMX/v2");
+
+
+         if ($params !== null) {   
+            $data_string = json_encode($params);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Content-Length: '.strlen($data_string))
+            );
+        }
+
         $result = curl_exec($ch);
         curl_close($ch);
 
@@ -590,6 +642,10 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
 
     public function validateCurrency() {
         return in_array(get_woocommerce_currency(), $this->currencies);
+    }
+
+    public function isNullOrEmptyString($string) {
+        return (!isset($string) || trim($string) === '');
     }
 
 }
