@@ -373,6 +373,10 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
             'order_id' => $order_id."_".date('Ymd_His')
         );
         
+        if($this->country === 'CO'){
+            $openpay_payment_args['iva'] = $this->iva;
+        }
+
         // See if we're using a particular card
         if ($card_id) {
             $openpay_payment_args['source_id'] = $card_id;

@@ -12,6 +12,8 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
 {
 
     protected $currencies = array('MXN', 'USD');
+    protected $country = '';
+    protected $iva = 0;
 
     /**
      * Constructor
@@ -21,8 +23,6 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $this->method_title = __('Openpay', 'openpay-woosubscriptions');
         $this->method_description = __('Openpay works by adding credit card fields on the checkout and then sending the details to Openpay for verification.', 'openpay-woosubscriptions');
         $this->has_fields = true;
-        $apiEndpoint = 'https://api.openpay.mx/v1';
-        $apiSandboxEndpoint = 'https://sandbox-api.openpay.mx/v1';
         $this->supports = array(
             'subscriptions',
             'products',
@@ -35,8 +35,11 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             'subscription_date_changes',
         );
 
+        $this->country = $this->get_option('country');
+        $this->currencies = $this->country == 'MX' ?  array('MXN', 'USD') : array('COP', 'USD'); 
+
         // Icon
-        $icon = 'credit_cards.png';
+        $icon = $this->country === 'MX' ? 'credit_cards.png' : 'credit_cards_co.png';
         $this->icon = apply_filters('wc_openpay_icon', plugins_url('/assets/images/'.$icon, dirname(__FILE__)));
 
         // Load the form fields
@@ -45,7 +48,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         // Load the settings.
         $this->init_settings();
 
-        // Get setting values
+        // Get setting values 
         $this->title = $this->get_option('title');
         $this->description = $this->get_option('description');
         $this->enabled = $this->get_option('enabled');
@@ -53,8 +56,11 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $this->merchant_id = $this->testmode ? $this->get_option('test_merchant_id') : $this->get_option('live_merchant_id');
         $this->secret_key = $this->testmode ? $this->get_option('test_secret_key') : $this->get_option('live_secret_key');
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('live_publishable_key');
+        $this->iva = $this->country == 'CO' ? $this->get_option('iva') : 0;
+        
+        $apiSandboxEndpoint = $this->country == 'MX' ? 'https://sandbox-api.openpay.mx/v1' : 'https://sandbox-api.openpay.co/v1';
+        $apiEndpoint = $this->country == 'MX' ? 'https://api.openpay.mx/v1' : 'https://sandbox-api.openpay.co/v1';
         $this->api_endpoint = $this->testmode ? $apiSandboxEndpoint : $apiEndpoint;
-        $this->cc_options = $this->getCreditCardList();
 
         if ($this->testmode) {
             $this->description .= ' '.__('SANDBOX MODE ENABLED. In test mode, you can use the card number 4111111111111111 with any CVC and a valid expiration date.', 'openpay-woosubscriptions');
@@ -191,8 +197,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'title' => __('Enable/Disable', 'openpay-woosubscriptions'),
                 'label' => __('Enable Openpay', 'openpay-woosubscriptions'),
                 'type' => 'checkbox',
-                'description' => '',
-                'default' => 'no'
+                'default' => 'yes'
             ),
             'sandbox' => array(
                 'title' => __('Sandbox mode', 'openpay-woosubscriptions'),
@@ -200,6 +205,15 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'type' => 'checkbox',
                 'description' => __('Place the payment gateway in test mode using test API keys.', 'openpay-woosubscriptions'),
                 'default' => 'yes'
+            ),
+            'country' => array(
+                'type' => 'select',
+                'title' => __('País', 'openpay-woosubscriptions'),                             
+                'default' => 'MX',
+                'options' => array(
+                    'MX' => 'México',
+                    'CO' => 'Colombia',
+                )
             ),
             'title' => array(
                 'title' => __('Title', 'openpay-woosubscriptions'),
@@ -248,7 +262,13 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Get your API keys from your openpay account.', 'openpay-woosubscriptions'),
                 'default' => ''
-            )
+            ),
+            'iva' => array(
+                'type' => 'number',
+                'required' => true,
+                'title' => __('IVA', 'openpay-woosubscriptions'),                
+                'default' => '0'               
+            ),
         ));
     }
 
@@ -262,9 +282,15 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $cc_form->supports = $this->supports;
         $this->cc_form = $cc_form;
         $this->images_dir = plugin_dir_url(__FILE__).'../assets/images/';
-        
-        $form_template = realpath(dirname(__FILE__)).'/../templates/payment_form.php';        
+        $this->cc_options = $this->getCreditCardList();
+        $form_template = realpath(dirname(__FILE__)).'/../templates/payment_form.php';
+
         include_once($form_template);        
+    }
+
+    public function admin_options() {
+        $form_template = realpath(dirname(__FILE__)).'/../templates/admin.php';                
+        include_once($form_template);
     }
 
     /**
@@ -278,9 +304,14 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         if (!is_checkout()) {
             return;
         }
+        if ($this->country == 'MX') {
+            wp_enqueue_script('openpay', 'https://openpay.s3.amazonaws.com/openpay.v1.min.js', '', '1.0', true);
+            wp_enqueue_script('openpay_fraud', 'https://openpay.s3.amazonaws.com/openpay-data.v1.min.js', '', '1.0', true);
+        }else if($this->country == 'CO'){
+            wp_enqueue_script('openpay', 'https://resources.openpay.co/openpay.v1.min.js', '', '', true);
+            wp_enqueue_script('openpay_fraud', 'https://resources.openpay.co/openpay-data.v1.min.js', '', '', true); 
+        }
 
-        wp_enqueue_script('openpay', 'https://openpay.s3.amazonaws.com/openpay.v1.min.js', '', '1.0', true);
-        wp_enqueue_script('openpay_fraud', 'https://openpay.s3.amazonaws.com/openpay-data.v1.min.js', '', '1.0', true);
         wp_enqueue_script('woocommerce_openpay', plugins_url('assets/js/openpay.js', dirname(__FILE__)), array('openpay'), WC_OPENPAY_VERSION, true);
 
         $openpay_params = array(
@@ -389,6 +420,10 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             // Make the request
             $response = $this->openpay_request($post_data, 'customers/'.$customer_id.'/charges');
 
+            if($this->country === 'CO'){
+                $post_data['iva'] = $this->iva;
+            }
+
             if (isset($response->error_code)) {
                 throw new Exception($response->description);
             }
@@ -446,15 +481,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         );
 
         if($this->hasAddress($order)) {
-            $customerData['address'] = array(
-                'line1' => substr($order->billing_address_1, 0, 200),
-                'line2' => substr($order->billing_address_2, 0, 50),
-                'line3' => '',
-                'state' => $order->billing_state,
-                'city' => $order->billing_city,
-                'postal_code' => $order->billing_postcode,
-                'country_code' => $order->billing_country
-            );
+            $customer_data = $this->formatAddress($customer_data, $order);
         }
                 
         $response = $this->openpay_request($customerData, 'customers');
@@ -482,6 +509,27 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         return false;    
     }
 
+    private function formatAddress($customer_data, $order) {
+        if ($this->country === 'MX') {
+            $customer_data['address'] = array(
+                'line1' => substr($order->get_billing_address_1(), 0, 200),
+                'line2' => substr($order->get_billing_address_2(), 0, 50),
+                'state' => $order->get_billing_state(),
+                'city' => $order->get_billing_city(),
+                'postal_code' => $order->get_billing_postcode(),
+                'country_code' => $order->get_billing_country()
+            );
+        } else if ($this->country === 'CO') {
+            $customer_data['customer_address'] = array(
+                'department' => $order->get_billing_state(),
+                'city' => $order->get_billing_city(),
+                'additional' => substr($order->get_billing_address_1(), 0, 200).' '.substr($order->get_billing_address_2(), 0, 50)
+            );
+        }
+        
+        return $customer_data;
+    }
+
 
     /**
      * Add a card to a customer via the API.
@@ -505,7 +553,11 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             if (isset($response->id)) {
                 return $response->id;
             } else {
-                $msg = $this->handleRequestError($response->error_code);
+                if($response->error_code == "1003"){
+                    $msg = "La tarjeta ha sido rechazada por el sistema antifraude.";
+                }else{
+                    $msg = $this->handleRequestError($response->error_code);
+                }
                 return new WP_Error('error', __($response->error_code.' '.$msg, 'openpay-woosubscriptions'));
             }
         }
@@ -525,6 +577,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
 
         $username = $this->secret_key;
         $password = "";
+        $userAgent = "Openpay-WSUB".$this->country."/v2";
 
         $data_string = json_encode($params);
 
@@ -534,7 +587,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
         curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        curl_setopt($ch, CURLOPT_USERAGENT, "Openpay-WSUBMX/v2");
+        curl_setopt($ch, CURLOPT_USERAGENT, $userAgent);
 
 
          if ($params !== null) {   

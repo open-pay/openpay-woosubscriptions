@@ -88,7 +88,7 @@ function openpayFormHandler() {
                     data.address.state = jQuery('#billing_state').val();
                     data.address.city = jQuery('#billing_city').val();
                     data.address.postal_code = jQuery('#billing_postcode').val();
-                    data.address.country_code = 'MX';
+                    data.address.country_code = jQuery('#billing_country').val();
                 }
             } else if (wc_openpay_params.billing_address_1) {
                 data.address = {};
@@ -97,7 +97,7 @@ function openpayFormHandler() {
                 data.address.state = wc_openpay_params.billing_state;
                 data.address.city = wc_openpay_params.billing_city;
                 data.address.postal_code = wc_openpay_params.billing_postcode;
-                data.address.country_code = 'MX';
+                data.address.country_code = wc_openpay_params.billing_country;
             }
             
             OpenPay.token.create(data, success_callbak, error_callbak);                        
