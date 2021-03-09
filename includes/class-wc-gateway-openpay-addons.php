@@ -314,6 +314,8 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         }else{
             $renewal_order->add_order_note(sprintf(__('Openpay successful payment subscription (Charge ID: %s)', 'openpay-woosubscriptions'), $charge->id));
             update_post_meta($renewal_order->id, '_openpay_charge_id', $charge->id);
+            update_post_meta($renewal_order->id, '_openpay_customer_id', $charge->customer_id);
+            update_post_meta($renewal_order->id, '_openpay_card_id', $charge->card->id);
             
             // Payment complete
             $renewal_order->payment_complete($charge->id);
