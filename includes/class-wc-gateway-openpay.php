@@ -59,7 +59,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $this->iva = $this->country == 'CO' ? $this->get_option('iva') : 0;
         
         $apiSandboxEndpoint = $this->country == 'MX' ? 'https://sandbox-api.openpay.mx/v1' : 'https://sandbox-api.openpay.co/v1';
-        $apiEndpoint = $this->country == 'MX' ? 'https://api.openpay.mx/v1' : 'https://sandbox-api.openpay.co/v1';
+        $apiEndpoint = $this->country == 'MX' ? 'https://api.openpay.mx/v1' : 'https://api.openpay.co/v1';
         $this->api_endpoint = $this->testmode ? $apiSandboxEndpoint : $apiEndpoint;
 
         if ($this->testmode) {
