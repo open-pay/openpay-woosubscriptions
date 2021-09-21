@@ -553,11 +553,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             if (isset($response->id)) {
                 return $response->id;
             } else {
-                if($response->error_code == "1003"){
-                    $msg = "La tarjeta ha sido rechazada por el sistema antifraude.";
-                }else{
-                    $msg = $this->handleRequestError($response->error_code);
-                }
+                $msg = $this->handleRequestError($response->error_code);
                 return new WP_Error('error', __($response->error_code.' '.$msg, 'openpay-woosubscriptions'));
             }
         }
@@ -606,87 +602,41 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
     }
 
     public function handleRequestError($responseCode) {
-
         switch ($responseCode) {
-
-            case "1000":
-                $msg = "Servicio no disponible.";
+            /* ERRORES GENERALES */
+            case '1000':
+            case '1004':
+            case '1005':
+                $msg = 'Servicio no disponible.';
                 break;
 
-            case "1001":
-                $msg = "Los campos no tienen el formato correcto, o la petición no tiene campos que son requeridos.";
+            /* ERRORES TARJETA */
+            case '1003':
+            case '3001':
+            case '3004':
+            case '3005':
+            case '3009':
+            case '3010':
+            case '3011':                    
+                $msg = 'La tarjeta fue rechazada.';
                 break;
-
-            case "1004":
-                $msg = "Servicio no disponible.";
+            case '3002':
+                $msg = 'La tarjeta ha expirado.';
                 break;
-
-            case "1005":
-                $msg = "Servicio no disponible.";
+            case '3003':
+                $msg = 'La tarjeta no tiene fondos suficientes.';
                 break;
-
-            case "2004":
-                $msg = "El dígito verificador del número de tarjeta es inválido de acuerdo al algoritmo Luhn.";
+            case '3006':
+                $msg = 'La operación no esta permitida para este cliente o esta transacción.';
                 break;
-
-            case "2005":
-                $msg = "La fecha de expiración de la tarjeta es anterior a la fecha actual.";
+            case '3008':
+                $msg = 'La tarjeta no es soportada en transacciones en línea.';
                 break;
-
-            case "2006":
-                $msg = "El código de seguridad de la tarjeta (CVV2) no fue proporcionado.";
+            case '3012':
+                $msg = 'Se requiere solicitar al banco autorización para realizar este pago.';
                 break;
-
-            case "3001":
-                $msg = "La tarjeta fue rechazada.";
-                break;
-
-            case "3002":
-                $msg = "La tarjeta ha expirado.";
-                break;
-
-            case "3003":
-                $msg = "La tarjeta no tiene fondos suficientes.";
-                break;
-
-            case "3004":
-                $msg = "La tarjeta ha sido identificada como una tarjeta robada.";
-                break;
-
-            case "3005":
-                $msg = "El cargo fue declinado por alto riesgo, intente nuevamente en 30 minutos.";
-                break;
-
-            case "3006":
-                $msg = "La operación no esta permitida para este cliente o esta transacción.";
-                break;
-
-            case "3007":
-                $msg = "Deprecado. La tarjeta fue declinada.";
-                break;
-
-            case "3008":
-                $msg = "La tarjeta no es soportada en transacciones en línea.";
-                break;
-
-            case "3009":
-                $msg = "La tarjeta fue reportada como perdida.";
-                break;
-
-            case "3010":
-                $msg = "El banco ha restringido la tarjeta.";
-                break;
-
-            case "3011":
-                $msg = "El banco ha solicitado que la tarjeta sea retenida. Contacte al banco.";
-                break;
-
-            case "3012":
-                $msg = "Se requiere solicitar al banco autorización para realizar este pago.";
-                break;
-
-            default: //Demás errores 400 
-                $msg = "La petición no pudo ser procesada.";
+            default: /* Demás errores 400 */
+                $msg = 'La petición no pudo ser procesada';
                 break;
         }
 
