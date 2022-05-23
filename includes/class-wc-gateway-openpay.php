@@ -33,6 +33,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             'subscription_payment_method_change',
             'subscription_payment_method_change_customer',
             'subscription_date_changes',
+            'multiple_subscriptions',
         );
 
         $this->country = $this->get_option('country');
