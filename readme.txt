@@ -2,9 +2,9 @@
 Contributors: openpay
 Tags: payment gateway, openpay, subscriptions 
 Requires at least: 4.8
-Tested up to: 5.7
+Tested up to: 5.9
 Requires PHP: 5.6
-Stable tag: 3.1.3
+Stable tag: 3.1.4
 License: GNU General Public License v3.0
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -16,6 +16,8 @@ For more information about this module go to:
 http://www.openpay.mx/docs/plugins/woosubscriptions.html
 
 == Changelog ==
+= 3.1.4 =
+Feature. Soporte subscripciones multiples.
 = 3.1.3 =
 Enhancement. Estandarización de mensajes de error al momento de procesar el pago
 = 3.1.2 =
