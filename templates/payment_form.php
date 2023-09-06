@@ -38,7 +38,7 @@
         <?php $this->cc_form->form() ?>        
     </div>
     <input type="hidden" name="device_session_id" id="device_session_id" />
-    <div>
-        Transacciones realizadas vía: <img alt="" src="<?php echo $this->images_dir ?>openpay.png" style="float: none; display: inline;">	
+    <div style="display: flex; justify-content: center;">
+        Transacciones realizadas vía: <img alt="" src="<?php echo $this->images_dir ?>openpay.png" style="float: none; display: inline; height: 30px; margin-left: 8px;">
     </div>
 </fieldset>
