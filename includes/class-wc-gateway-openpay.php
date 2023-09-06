@@ -394,6 +394,11 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 }
             }
 
+            if($openpay_cc !== 'new') {
+                $cvv = isset($_POST['openpay-card-cvc']) ? wc_clean($_POST['openpay-card-cvc']) : '';
+                $this->cvvValidation($openpay_cc, $customer_id, $cvv);
+            }
+
             if($openpay_cc == 'new'){
                 $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
                 if (is_wp_error($card_id)) {
@@ -557,6 +562,26 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 $msg = $this->handleRequestError($response->error_code);
                 return new WP_Error('error', __($response->error_code.' '.$msg, 'openpay-woosubscriptions'));
             }
+        }
+    }
+
+    /**
+     * @param $openpay_cc
+     * @param $openpay_customer
+     * @param $cvv
+     * @throws Exception
+     */
+    protected function cvvValidation($openpay_cc,$openpay_customer,$cvv){
+        if (is_numeric($cvv) && (strlen($cvv) == 3 || strlen($cvv) == 4) ){
+            $api       = sprintf('customers/%s/cards/%s', $openpay_customer, $openpay_cc);
+            $params     = array('cvv2' => $cvv);
+
+            $cardInfo = $this->openpay_request($params, $api, $method = 'PUT');
+            if (isset($cardInfo->error_code)){
+                throw new Exception("Error en la transacción: La actualización de CVV falló");
+            }
+        }else{
+            throw new Exception("Error en la transacción: El CVV es invalido");
         }
     }
 

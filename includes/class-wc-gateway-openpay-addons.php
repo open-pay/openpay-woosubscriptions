@@ -70,6 +70,11 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                 }
             }
 
+            if($openpay_cc !== 'new') {
+                $cvv = isset($_POST['openpay-card-cvc']) ? wc_clean($_POST['openpay-card-cvc']) : '';
+                $this->cvvValidation($openpay_cc, $customer_id, $cvv);
+            }
+
             // Store the ID in the order
             update_post_meta($order_id, '_openpay_customer_id', $customer_id);
             update_post_meta($order_id, '_openpay_card_id', $openpay_token);
@@ -174,6 +179,12 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
                         throw new Exception($customer_id->get_error_message());
                     }
                 }
+
+                if($openpay_cc !== 'new') {
+                    $cvv = isset($_POST['openpay-card-cvc']) ? wc_clean($_POST['openpay-card-cvc']) : '';
+                    $this->cvvValidation($openpay_cc, $customer_id, $cvv);
+                }
+
                 if($openpay_cc == 'new'){
                     $card_id = $this->add_card($customer_id, $openpay_token, $device_session_id);
                     if (is_wp_error($card_id)) {
@@ -433,6 +444,4 @@ class WC_Gateway_Openpay_Addons extends WC_Gateway_Openpay
         update_post_meta($subscription->get_id(), '_openpay_card_id', $new_card_id);
         update_post_meta($subscription->get_parent_id(), '_openpay_card_id', $new_card_id);
     }
-
-
 }

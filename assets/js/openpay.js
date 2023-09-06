@@ -7,6 +7,10 @@ jQuery(function() {
     jQuery('#device_session_id').val(deviceSessionId);
     var $form = jQuery('form.checkout,form#order_review');
 
+    jQuery("form.checkout, form#order_review").on('focus', '#openpay-card-cvc', function(event) {
+        jQuery("#openpay-card-cvc").attr('type','password');
+    });
+
     /* Checkout Form */
     jQuery('form.checkout').on('checkout_place_order_openpay', function(event) {
         if (jQuery('#openpay_cc').val() !== 'new') {
@@ -14,6 +18,18 @@ jQuery(function() {
             return true;
         }
         return openpayFormHandler();
+    });
+
+    jQuery('body').on('click', 'form.checkout button:submit', function () {
+        jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
+        // Make sure there's not an old token on the form
+        jQuery('form.checkout').find('[name=openpay_token]').remove();
+
+        if (jQuery('input[name=payment_method]:checked').val() == 'openpay') {
+            console.log("Verifying card data");
+            return CardsErrorHandler();
+        }
+
     });
 
     if(jQuery('#openpay_cc').children('option').length > 1){
@@ -29,9 +45,15 @@ jQuery(function() {
             jQuery('#openpay-card-expiry').val("");            
             jQuery('#openpay-card-cvc').val("");                                                         
                             
-            jQuery('.openpay_new_card').hide();
+            //jQuery('.openpay_new_card').hide();
+            jQuery('#openpay-card-number').parent().hide();
+            jQuery('#openpay-card-expiry').parent().hide();
+            jQuery('#openpay-card-cvc').parents('p').removeClass("form-row-last");
         } else {                    
-            jQuery('.openpay_new_card').show();
+            //jQuery('.openpay_new_card').show();
+            jQuery('#openpay-card-number').parent().show();
+            jQuery('#openpay-card-expiry').parent().show();
+            jQuery('#openpay-card-cvc').parents('p').addClass("form-row-last");
         }
     });
 
@@ -46,11 +68,20 @@ jQuery(function() {
     /* Both Forms */
     jQuery("form.checkout, form#order_review").on('change', '#openpay-card-number, #openpay-card-expiry, #openpay-card-cvc, input[name=openpay_card_id]', function(event) {
         //jQuery('#openpay_token').val("");
-        jQuery('#openpay_token').remove();      
+        jQuery('#openpay_token').remove();
         jQuery('.woocommerce_error, .woocommerce-error, .woocommerce-message, .woocommerce_message').remove();
     });
 
+
 });
+
+function CardsErrorHandler (){
+    // Check if cvv is not empty
+    if (jQuery('#openpay_cc').val() !== "new" &&  jQuery('#openpay-card-cvc').val().length < 3) {
+        error_callbak({data:{error_code:2006}});
+        return false;
+    }
+}
 
 function openpayFormHandler() {
     if (jQuery('#payment_method_openpay').is(':checked')) {
