@@ -16,6 +16,8 @@ For more information about this module go to:
 http://www.openpay.mx/docs/plugins/woosubscriptions.html
 
 == Changelog ==
+= 3.2.1 =
+Feature. Compatibilidad WC 9.1, WooCommerce Subscriptions 6.5 & Wordpress 6.6
 = 3.2.0 =
 Feature. Implementación de solícitud de CVV para compras con tarjeta guardada.
 = 3.1.4 =
