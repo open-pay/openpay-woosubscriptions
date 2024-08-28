@@ -14,6 +14,17 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
     protected $currencies = array('MXN', 'USD');
     protected $country = '';
     protected $iva = 0;
+    public $title;
+    public $description; 
+    public $enabled;
+    protected $testmode; 
+    protected $merchant_id; 
+    protected $secret_key;
+    protected $publishable_key; 
+    protected $api_endpoint;
+    protected $cc_form;
+    protected $images_dir;
+    protected $cc_options;
 
     /**
      * Constructor
