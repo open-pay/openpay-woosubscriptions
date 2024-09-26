@@ -21,10 +21,12 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
     protected $merchant_id; 
     protected $secret_key;
     protected $publishable_key; 
+    protected $charge_type;
     protected $api_endpoint;
     protected $cc_form;
     protected $images_dir;
     protected $cc_options;
+    protected $logger;
 
     /**
      * Constructor
@@ -59,6 +61,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
 
         // Load the settings.
         $this->init_settings();
+        $this->logger = wc_get_logger(); 
 
         // Get setting values 
         $this->title = $this->get_option('title');
@@ -68,6 +71,7 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $this->merchant_id = $this->testmode ? $this->get_option('test_merchant_id') : $this->get_option('live_merchant_id');
         $this->secret_key = $this->testmode ? $this->get_option('test_secret_key') : $this->get_option('live_secret_key');
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('live_publishable_key');
+        $this->charge_type = $this->get_option('charge_type');
         $this->iva = $this->country == 'CO' ? $this->get_option('iva') : 0;
         
         $apiSandboxEndpoint = $this->country == 'MX' ? 'https://sandbox-api.openpay.mx/v1' : 'https://sandbox-api.openpay.co/v1';
@@ -275,12 +279,24 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
                 'description' => __('Get your API keys from your openpay account.', 'openpay-woosubscriptions'),
                 'default' => ''
             ),
+            'charge_type' => array(
+		        'title' => __('¿Cómo procesar el cargo?', 'woocommerce'),
+                'type' => 'select',
+                'class' => 'wc-enhanced-select',
+                'description' => __('¿Qué es la autenticación selectiva? Es cuando Openpay detecta cierto riesgo de fraude y envía el cargo a través de 3D Secure.', 'woocommerce'),
+                'default' => 'direct',
+                'desc_tip' => true,                
+                'options' => array(
+                    'direct' => __('Directo', 'woocommerce'),
+                    '3d' => __('3D Secure', 'woocommerce'),
+                ),
+            ),
             'iva' => array(
                 'type' => 'number',
                 'required' => true,
                 'title' => __('IVA', 'openpay-woosubscriptions'),                
                 'default' => '0'               
-            ),
+            )
         ));
     }
 
@@ -371,6 +387,8 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
         $openpay_token = isset($_POST['openpay_token']) ? wc_clean($_POST['openpay_token']) : '';
         $customer_id = is_user_logged_in() ? get_user_meta(get_current_user_id(), '_openpay_customer_id', true) : 0;
         $openpay_cc = $_POST['openpay_cc'];
+        $protocol = (get_option('woocommerce_force_ssl_checkout') == 'no') ? 'http' : 'https';
+        $redirect_url_3d = site_url('/', $protocol).'?wc-api=openpay_confirm';
 
         if (!$customer_id || !is_string($customer_id)) {
             $customer_id = 0;
@@ -432,10 +450,16 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             $post_data['description'] = sprintf(__('%s - Order '.$card_id.' %s', 'openpay-woosubscriptions'), wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES), $order->get_order_number());
             $post_data['method'] = 'card';
             $post_data['device_session_id'] = $device_session_id;
-            $post_data['order_id'] = $order->id."_".date('YmdHis');
+            $post_data['order_id'] = $order->id;
+
+            if ($this->charge_type == '3d') {
+                $post_data['use_3d_secure'] = true;
+                $post_data['redirect_url'] = $redirect_url_3d;
+            }
 
             // Make the request
             $response = $this->openpay_request($post_data, 'customers/'.$customer_id.'/charges');
+            $redirect_url = $response->payment_method->url;
 
             if($this->country === 'CO'){
                 $post_data['iva'] = $this->iva;
@@ -460,16 +484,37 @@ class WC_Gateway_Openpay extends WC_Payment_Gateway
             // Store captured value
             update_post_meta($order->id, '_openpay_charge_captured', 'yes');
 
-            // Payment complete
-            $order->payment_complete($response->id);
+            if ($response->payment_method && $response->payment_method->type == 'redirect') {
+                $this->logger->info('createOpenpayCharge update_order_meta_data => '.$response->payment_method->url);
+                update_post_meta($order->id,'_openpay_3d_secure_url', $response->payment_method->url);
+                // Si el cargo es Frictionless y es inmediato, se marca la orden como completada
+                if($this->country == 'MX'){
+                    if (str_contains($redirect_url,'frictionless')) {
+                        $this->logger->info('3DS trx => Frictionless');
+                        $order->payment_complete($response->id);                            
+                        $order->add_order_note(sprintf("openpay-woosubscriptions payment completed by 3DS frictionless with Transaction Id of '%s'", $response->id));
+                    // Si el cargo es Challenge se pone en status on-hold hasta concluir el proceso.
+                    }else if ( $redirect_url && !str_contains($redirect_url,'frictionless')) {
+                        $this->logger->info('3DS trx => Challenge');
+                        $order->update_status('on-hold');
+                        $order->add_order_note(sprintf("openpay-woosubscriptions payment on hold by 3DS challenge with Transaction Id of '%s'", $response->id));
+                    }
+                }else{
+                    $order->update_status('on-hold');
+                    $order->add_order_note(sprintf("openpay-woosubscriptions payment on hold by 3DS with Transaction Id of '%s'", $response->id));
+                    }
+                    $this->logger->info("3DS_Redirect_URL = " . $redirect_url);
+            }else{
+                delete_post_meta($order->id, '_openpay_3d_secure_url');
+            }
+            if ($response->id && !$redirect_url) {
+                $order->payment_complete($response->id);
+                WC()->cart->empty_cart();
+                $order->add_order_note(sprintf("openpay-woosubscriptions payment completed with Transaction Id of '%s'", $response->id));
+            }
+            $this->logger->info("Payment Without Subscription");
+            $this->logger->info("Return URL = " . $this->get_return_url($order));
 
-            // Add order note
-            $order->add_order_note(sprintf(__('Openpay charge complete (Charge ID: %s)', 'openpay-woosubscriptions'), $response->id));
-
-            // Remove cart
-            WC()->cart->empty_cart();
-
-            // Return thank you page redirect
             return array(
                 'result' => 'success',
                 'redirect' => $this->get_return_url($order)
