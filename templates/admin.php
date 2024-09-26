@@ -14,9 +14,9 @@
 
 <?php if(!$this->validateCurrency()): ?>
     <?php if($this->country != 'MX'): ?>
-        <div class="inline error">Openpay WooSubscriptions Plugin is only available for MX currency.</div>
+        <div class="inline error">Openpay WooSubscriptions Plugin is only available for COP and USD currency.</div>
     <?php else: ?>
-        <div class="inline error">Openpay WooSubscriptions Plugin is only available for COP currency.</div>
+        <div class="inline error">Openpay WooSubscriptions Plugin is only available for MXN and USD currency.</div>
     <?php endif; ?>
 <?php endif; ?>
 

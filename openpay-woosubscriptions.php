@@ -4,7 +4,7 @@
   Plugin Name: Openpay WooSubscriptions Plugin
   Plugin URI: https://github.com/open-pay/openpay-woosubscriptions
   Description: Este plugin soporta suscripciones a través de Openpay utilizando WooCommerce y WooCommerce Subscriptions
-  Version: 3.2.1
+  Version: 3.2.2
   Author: Openpay
   Author URI: https://openpay.mx
   Developer: Openpay
@@ -30,6 +30,97 @@ if (!function_exists('woothemes_queue_update')) {
     require_once( 'woo-includes/woo-functions.php' );
 }
 
+
+add_action('woocommerce_api_openpay_confirm', 'openpay_woocommerce_confirm', 10, 0);
+//add_action('template_redirect',array($this, 'wc_custom_redirect_after_purchase'),0 );
+
+
+add_action('template_redirect', 'wc_custom_redirect_after_purchase', 0);
+function wc_custom_redirect_after_purchase() {
+    ob_start();
+    global $wp;
+    $logger = wc_get_logger();
+    if (is_checkout() && !empty($wp->query_vars['order-received'])) {
+        $order = new WC_Order($wp->query_vars['order-received']);
+        $redirect_url = get_post_meta($order->get_id(), '_openpay_3d_secure_url', true);
+        $logger->debug('wc_custom_redirect_after_purchase ');
+        $logger->debug('3DS_redirect_url : ' .  $redirect_url);
+        $logger->debug('order_status : ' .  $order->get_status());
+
+        if ($redirect_url && $order->get_status() != 'processing') {
+            $order->delete_meta_data($order->id, '_openpay_3d_secure_url');
+            $order->save();
+            $logger->debug('order not processed redirect_url : ' . $redirect_url);
+            wp_redirect($redirect_url);
+            ob_end_flush();
+            exit();
+        }
+    }
+}
+
+function openpay_woocommerce_confirm() {   
+    global $woocommerce;
+    $logger = wc_get_logger();
+    
+    $id = $_GET['id'];        
+    
+    $logger->info('openpay_woocommerce_confirm => '.$id);   
+    
+    try {            
+        $openpay_subscriptions = new WC_Gateway_Openpay();  
+        $charge = $openpay_subscriptions->openpay_request(null, 'charges/'.$id, 'GET');
+
+        $order = new WC_Order($charge->order_id);
+        $logger->info('openpay_woocommerce_confirm => ORDER: '. $order->get_id());   
+        $logger->info('openpay_woocommerce_confirm => '.json_encode(array('id' => $charge->id, 'status' => $charge->status)));   
+
+        if ($order && $charge->status != 'completed') {
+            if (property_exists($charge, 'authorization') && ($charge->status == 'in_progress' && ($charge->id != $charge->authorization))) {  
+                $order->set_status('on-hold');
+                $order->save();
+                $logger->info('openpay_woocommerce_confirm => set_status:on-hold');
+            } else {  
+                $order->add_order_note(sprintf("%s Credit Card Payment Failed with message: '%s'", 'openpay-woosubscriptions', 'Status '.$charge->status));
+                $order->set_status('failed');
+                $order->save();
+                $logger->info('openpay_woocommerce_confirm => set_status:failed');
+
+                if ($order && $charge->status == 'failed') {
+                    $logger->info('openpay_woocommerce_confirm => Returning to cart for order: '. $order->get_id()); 
+                    $logger->info('openpay_woocommerce_confirm => Return checkout URL: '. $woocommerce->cart->get_checkout_url()); 
+                    //$woocommerce->cart->empty_cart();
+                    wp_redirect($woocommerce->cart->get_checkout_url());
+                    exit();
+                }
+
+                if (function_exists('wc_add_notice')) { 
+                    wc_add_notice(__('Error en la transacción: No se pudo completar tu pago.'), 'error');
+                } else {  
+                    $woocommerce->add_error(__('Error en la transacción: No se pudo completar tu pago.'), 'woothemes');
+                }
+            }
+        } else if ($order && $charge->status == 'completed') {
+            $order->payment_complete();
+            $logger->info('openpay_woocommerce_confirm => set_status:completed');
+            $woocommerce->cart->empty_cart();
+            $order->add_order_note(sprintf("%s payment completed with Transaction Id of '%s'", 'openpay-woosubscriptions', $charge->id));
+            
+            if(null != get_post_meta($order->get_id(), '_openpay_charge_subscription_id', true)){
+                // Activate subscriptions
+                WC_Subscriptions_Manager::activate_subscriptions_for_order($order);
+            }
+        }                 
+        wp_redirect($openpay_subscriptions->get_return_url($order));    
+        exit();      
+    } catch (Exception $e) {
+        $logger->error($e->getMessage());            
+        status_header( 404 );
+        nocache_headers();
+        include(get_query_template('404'));
+        die();
+    }                
+}    
+
 /**
  * Main Openpay class which sets the gateway up for us
  */
@@ -39,7 +130,7 @@ class WC_Openpay_Subscriptions {
      * Constructor
      */
     public function __construct() {
-        define('WC_OPENPAY_VERSION', '3.2.1');
+        define('WC_OPENPAY_VERSION', '3.2.2');
         define('WC_OPENPAY_TEMPLATE_PATH', untrailingslashit(plugin_dir_path(__FILE__)) . '/templates/');
         define('WC_OPENPAY_PLUGIN_URL', untrailingslashit(plugins_url(basename(plugin_dir_path(__FILE__)), basename(__FILE__))));
         define('WC_OPENPAY_MAIN_FILE', __FILE__);
@@ -51,6 +142,7 @@ class WC_Openpay_Subscriptions {
         add_action('woocommerce_order_status_on-hold_to_processing', array($this, 'capture_payment'));
         add_action('woocommerce_order_status_on-hold_to_completed', array($this, 'capture_payment'));
         //add_action('woocommerce_order_status_on-hold_to_cancelled', array($this, 'cancel_payment'));
+        
         
     }
 

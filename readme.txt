@@ -2,9 +2,9 @@
 Contributors: openpay
 Tags: payment gateway, openpay, subscriptions 
 Requires at least: 4.8
-Tested up to: 6.3
+Tested up to: 6.6.1
 Requires PHP: 5.6
-Stable tag: 3.2.0
+Stable tag: 3.2.2
 License: GNU General Public License v3.0
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -16,6 +16,8 @@ For more information about this module go to:
 http://www.openpay.mx/docs/plugins/woosubscriptions.html
 
 == Changelog ==
+= 3.2.2 =
+Feature. Implementación de Transacciones 3D Secure y Cargo Directo.
 = 3.2.1 =
 Feature. Compatibilidad WC 9.1, WooCommerce Subscriptions 6.5 & Wordpress 6.6
 = 3.2.0 =
